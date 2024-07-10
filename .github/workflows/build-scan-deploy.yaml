@@ -48,7 +48,7 @@ jobs:
               path: ~/
 
           - name: run sonarqube scan against code
-             run: 
+             run: |
                 mvn sonar:sonar \
                 -Dsonar.projectKey=scan_code \
                 -Dsonar.host.url=http://54.196.2.216:9000 \
