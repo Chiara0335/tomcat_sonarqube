@@ -1,61 +1,53 @@
-name: building scanning deloying webapp on tomcat hosted on ec2
-
+---
+name: building scanning deploying webapp on tomcat hosted on ec2
 on:
-     push:
-        branches:
-           - main
-
+  push:
+    branches:
+      - main
 jobs:
-    build_and_upload_artifact:
-      runs-on: ubuntu-latest
-      steps:
-        - name: clone repository into github runner
-          uses: actions/checkout@v3
+  build_and_upload_artifact:
+    runs-on: ubuntu-latest
+    steps:
+      - name: clone repository into GitHub runner
+        uses: actions/checkout@v3
+      - name: install and setup maven with GitHub runner
+        uses: actions/setup-java@v3
+        with:
+          distribution: adopt
+          java-version: "11"
+      - name: build app with apache maven
+        run: mvn clean package
+      - name: upload maven artifact into GitHub packages
+        uses: actions/upload-artifact@v3
+        with:
+          name: webapp
+          path: target/*.war
+  deploy_artifact:
+    runs-on: ubuntu-latest
+    needs: build_and_upload_artifact
+    steps:
+      - name: clone repository into runner
+        uses: actions/checkout@v3
+      - name: install and setup maven with GitHub runner
+        uses: actions/setup-java@v3
+        with:
+          distribution: adopt
+          java-version: "11"
+      - name: download the artifact we uploaded
+        uses: actions/download-artifact@v3
+        with:
+          name: webapp
+          path: ~/
+      - name: Run SonarQube scan against code
+        run: |
+          mvn sonar:sonar \
+          -Dsonar.projectKey=scan_code \
+          -Dsonar.host.url=http://54.196.2.216:9000 \
+          -Dsonar.login=babbc55598ee17b71d968750d13104f381c794d4
+      - name: push into tomcat
+        run: >
+          echo "${{secrets.KEY_PAIR_FILE}}" > ~/key_pair.pem
 
-        - name: install and setup maven with github runner
-          uses: actions/setup-java@v3
-          with:
-            distribution: "adopt"
-            java-version: "11"
+          chmod 400 ~/key_pair.pem
 
-        - name: build app with apache maven
-          run: mvn clean package
-
-        - name: upload maven artifact into github packages
-          uses: actions/upload-artifact@v3
-          with:
-           name: webapp
-           path: target/*.war
-
-
-    deploy_artifact:
-      runs-on: ubuntu-latest
-      needs: build_and_upload_artifact
-      steps: 
-          - name: clone repository into runner
-            uses: actions/checkout@v3
-
-          - name: install and setup maven with github runner
-            uses: actions/setup-java@v3
-            with:
-              distribution: "adopt"
-              java-version: "11"
-
-          - name: download the artifact we uploaded
-            uses: actions/download-artifact@v3
-            with: 
-              name: webapp
-              path: ~/
-
-          - name: run sonarqube scan against code
-             run: |
-                mvn sonar:sonar \
-                -Dsonar.projectKey=scan_code \
-                -Dsonar.host.url=http://54.196.2.216:9000 \
-                -Dsonar.login=babbc55598ee17b71d968750d13104f381c794d4
-
-          - name: push into tomcat
-            run: 
-             echo "${{secrets.KEY_PAIR_FILE}}" > ~/key_pair.pem
-             chmod 400 ~/key_pair.pem
-             sudu scp -i ~/key_pair.pem -o StrictHostKeyChecking=no ~/*.war ec2-user@3.92.71.9:/opt/tomcat9/webapps
+          sudo scp -i ~/key_pair.pem -o StrictHostKeyChecking=no ~/*.war ec2-user@3.92.71.9:/opt/tomcat9/webapps
